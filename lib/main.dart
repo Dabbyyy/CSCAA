@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // FIX 1: Import added
+import 'package:shared_preferences/shared_preferences.dart'; 
 import 'dart:convert';
 
 void main() => runApp(const TaskApp());
@@ -132,6 +132,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _login() async {
     final prefs = await SharedPreferences.getInstance();
+    // Default Admin
     List<AppUser> users = [AppUser(email: "admin@cscaa.com", password: "admin123", role: UserRole.admin)];
     
     final savedUsers = prefs.getString('registered_users');
@@ -220,44 +221,75 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (c) => const LoginScreen()));
   }
 
-  void _showStaffRegistration() {
-    final emailController = TextEditingController();
-    final passController = TextEditingController();
+  void _showStaffManagement() async {
+    final prefs = await SharedPreferences.getInstance();
     
+    // ignore: use_build_context_synchronously
     Navigator.of(context).push(MaterialPageRoute(
       fullscreenDialog: true,
-      builder: (context) => Scaffold(
-        appBar: AppBar(
-          title: const Text("Register Staff"),
-          leading: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
-        ),
-        body: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            children: [
-              TextField(controller: emailController, decoration: const InputDecoration(labelText: "Staff Email", border: OutlineInputBorder())),
-              const SizedBox(height: 16),
-              TextField(controller: passController, obscureText: true, decoration: const InputDecoration(labelText: "Temporary Password", border: OutlineInputBorder())),
-              const Spacer(),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: FilledButton(
-                  onPressed: () async {
-                    if (emailController.text.isNotEmpty && passController.text.isNotEmpty) {
-                      final prefs = await SharedPreferences.getInstance();
-                      List<dynamic> users = jsonDecode(prefs.getString('registered_users') ?? "[]");
-                      users.add(AppUser(email: emailController.text, password: passController.text, role: UserRole.staff).toJson());
-                      await prefs.setString('registered_users', jsonEncode(users));
-                      if (mounted) Navigator.pop(context);
-                    }
-                  }, 
-                  child: const Text("Create Staff Account")
-                ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setM) {
+          List<dynamic> userList = jsonDecode(prefs.getString('registered_users') ?? "[]");
+          final emailController = TextEditingController();
+          final passController = TextEditingController();
+
+          return Scaffold(
+            appBar: AppBar(title: const Text("Staff Management")),
+            body: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("Register New Staff", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  const SizedBox(height: 16),
+                  TextField(controller: emailController, decoration: const InputDecoration(labelText: "Email", border: OutlineInputBorder())),
+                  const SizedBox(height: 12),
+                  TextField(controller: passController, decoration: const InputDecoration(labelText: "Password", border: OutlineInputBorder())),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity, 
+                    child: FilledButton.icon(
+                      onPressed: () async {
+                        if(emailController.text.isNotEmpty && passController.text.isNotEmpty) {
+                          userList.add(AppUser(email: emailController.text, password: passController.text, role: UserRole.staff).toJson());
+                          await prefs.setString('registered_users', jsonEncode(userList));
+                          setM(() {}); 
+                        }
+                      }, 
+                      icon: const Icon(Icons.person_add),
+                      label: const Text("Add to Team")
+                    )
+                  ),
+                  const Divider(height: 50),
+                  const Text("Current Staff Members", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: userList.length,
+                      itemBuilder: (c, i) {
+                        final u = AppUser.fromJson(userList[i]);
+                        return Card(
+                          child: ListTile(
+                            leading: const CircleAvatar(child: Icon(Icons.person)),
+                            title: Text(u.email),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete_outline, color: Colors.red),
+                              onPressed: () async {
+                                userList.removeAt(i);
+                                await prefs.setString('registered_users', jsonEncode(userList));
+                                setM(() {});
+                              },
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        }
       ),
     ));
   }
@@ -274,7 +306,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         builder: (context, setM) => Scaffold(
           appBar: AppBar(
             title: Text(isEdit ? "Edit Task" : "New Task"),
-            leading: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
             actions: [
               TextButton(
                 onPressed: () {
@@ -293,23 +324,21 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     Navigator.pop(context);
                   }
                 }, 
-                child: const Text("SAVE", style: TextStyle(fontWeight: FontWeight.bold))
+                child: const Text("SAVE")
               )
             ],
           ),
           body: ListView(
             padding: const EdgeInsets.all(24),
             children: [
-              TextField(controller: titleC, decoration: const InputDecoration(labelText: "Task Title", border: OutlineInputBorder())),
+              TextField(controller: titleC, decoration: const InputDecoration(labelText: "Task Name", border: OutlineInputBorder())),
               const SizedBox(height: 20),
-              TextField(controller: descC, maxLines: 5, decoration: const InputDecoration(labelText: "Instructions", border: OutlineInputBorder())),
+              TextField(controller: descC, maxLines: 4, decoration: const InputDecoration(labelText: "Instructions", border: OutlineInputBorder())),
               const SizedBox(height: 20),
-              const Text("Schedule", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(DateFormat('EEEE, MMM dd, yyyy').format(selectedDate)),
+                title: Text(DateFormat('EEEE, MMM dd').format(selectedDate)),
                 subtitle: Text(DateFormat('hh:mm a').format(selectedDate)),
-                trailing: const Icon(Icons.calendar_today, color: Color(0xFF6C63FF)),
+                trailing: const Icon(Icons.calendar_month),
                 onTap: () async {
                   final d = await showDatePicker(context: context, initialDate: selectedDate, firstDate: DateTime.now(), lastDate: DateTime(2030));
                   if (d != null) {
@@ -319,15 +348,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 },
               ),
               if (isEdit) ...[
-                const Divider(height: 40),
-                TextButton.icon(
+                const SizedBox(height: 40),
+                OutlinedButton.icon(
                   onPressed: () {
                     setState(() => _tasks.removeAt(index));
                     _saveData();
                     Navigator.pop(context);
                   }, 
-                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  label: const Text("Delete Task", style: TextStyle(color: Colors.red))
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  label: const Text("Remove Task", style: TextStyle(color: Colors.red))
                 )
               ]
             ],
@@ -355,11 +384,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         leading: IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
         actions: [
           if (_currentRole == UserRole.admin) 
-            IconButton(icon: const Icon(Icons.person_add_alt_1), onPressed: _showStaffRegistration),
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Center(child: Text(_currentRole.name.toUpperCase(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold))),
-          )
+            IconButton(icon: const Icon(Icons.group_add), onPressed: _showStaffManagement),
+          const SizedBox(width: 8),
         ],
       ),
       body: IndexedStack(index: _selectedIndex, children: pages),
@@ -367,16 +393,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         selectedIndex: _selectedIndex,
         onDestinationSelected: (i) => setState(() => _selectedIndex = i),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.assignment), label: "Tasks"),
-          NavigationDestination(icon: Icon(Icons.calendar_month), label: "Calendar"),
+          NavigationDestination(icon: Icon(Icons.list_alt), label: "Tasks"),
+          NavigationDestination(icon: Icon(Icons.event), label: "Calendar"),
         ],
       ),
       floatingActionButton: _currentRole == UserRole.admin
-          ? FloatingActionButton.extended(
-              onPressed: () => _showTaskPage(), 
-              label: const Text("New Task"),
-              icon: const Icon(Icons.add)
-            )
+          ? FloatingActionButton.extended(onPressed: () => _showTaskPage(), label: const Text("New Task"), icon: const Icon(Icons.add))
           : null,
     );
   }
@@ -389,22 +411,24 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       builder: (c) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(c).viewInsets.bottom, left: 24, right: 24, top: 24),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text("Post Progress Update", style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text("Add Progress Update", style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
-          TextField(autofocus: true, onChanged: (v) => text = v, decoration: const InputDecoration(hintText: "What happened?", border: OutlineInputBorder())),
+          TextField(autofocus: true, onChanged: (v) => text = v, decoration: const InputDecoration(hintText: "Type update here...", border: OutlineInputBorder())),
           const SizedBox(height: 16),
           SizedBox(width: double.infinity, child: FilledButton(onPressed: () {
             if (text.isNotEmpty) {
               setState(() => _tasks[index].updates.insert(0, TaskUpdate(text, DateTime.now())));
               _saveData(); Navigator.pop(c);
             }
-          }, child: const Text("Post"))),
+          }, child: const Text("Submit"))),
           const SizedBox(height: 24),
         ]),
       )
     );
   }
 }
+
+// --- UI COMPONENTS ---
 
 class HomeScreen extends StatelessWidget {
   final List<Task> tasks;
@@ -464,7 +488,7 @@ class _TaskTile extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12), 
-        side: BorderSide(color: Colors.grey[200]!), // FIX 2: changed 'border' to 'side'
+        side: BorderSide(color: Colors.grey[200]!), // CORRECTED: Changed 'border' to 'side'
       ),
       child: ExpansionTile(
         leading: Checkbox(value: task.isDone, onChanged: (v) { task.isDone = v!; onCheck(); }),
@@ -475,7 +499,7 @@ class _TaskTile extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text("DETAILS", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+              const Text("INSTRUCTIONS", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
               const SizedBox(height: 4),
               Text(task.description.isEmpty ? "No detailed instructions." : task.description),
               const Divider(height: 30),
